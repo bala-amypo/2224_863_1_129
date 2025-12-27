@@ -1,70 +1,48 @@
 package com.example.demo.model;
 
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Column;
-
-import java.util.List;
+import jakarta.persistence.*;
 
 @Entity
+@Table(name = "bundle_rules")
 public class BundleRule {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(unique = true)
+    
+    @Column(nullable = false)
     private String ruleName;
-
-    @ElementCollection
-    private List<Long> requiredProductIds;
-
+    
+    @Column(nullable = false)
+    private String requiredProductIds;
+    
+    @Column(nullable = false)
     private Double discountPercentage;
-    private Boolean active;
-
-    public BundleRule() {
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getRuleName() {
-        return ruleName;
-    }
-
-    public void setRuleName(String ruleName) {
+    
+    @Column(nullable = false)
+    private Boolean active = true;
+    
+    public BundleRule() {}
+    
+    public BundleRule(String ruleName, String requiredProductIds, Double discountPercentage) {
         this.ruleName = ruleName;
-    }
-
-    public List<Long> getRequiredProductIds() {
-        return requiredProductIds;
-    }
-
-    public void setRequiredProductIds(List<Long> requiredProductIds) {
         this.requiredProductIds = requiredProductIds;
-    }
-
-    public Double getDiscountPercentage() {
-        return discountPercentage;
-    }
-
-    public void setDiscountPercentage(Double discountPercentage) {
         this.discountPercentage = discountPercentage;
+        this.active = true;
     }
-
-    public Boolean getActive() {
-        return active;
-    }
-
-    public void setActive(Boolean active) {
-        this.active = active;
-    }
+    
+    // Getters and setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    
+    public String getRuleName() { return ruleName; }
+    public void setRuleName(String ruleName) { this.ruleName = ruleName; }
+    
+    public String getRequiredProductIds() { return requiredProductIds; }
+    public void setRequiredProductIds(String requiredProductIds) { this.requiredProductIds = requiredProductIds; }
+    
+    public Double getDiscountPercentage() { return discountPercentage; }
+    public void setDiscountPercentage(Double discountPercentage) { this.discountPercentage = discountPercentage; }
+    
+    public Boolean getActive() { return active; }
+    public void setActive(Boolean active) { this.active = active; }
 }
