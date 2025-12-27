@@ -1,90 +1,68 @@
 package com.example.demo.service.impl;
 
-import com.example.demo.model.BundleRule;
-import com.example.demo.model.Cart;
-import com.example.demo.model.CartItem;
-import com.example.demo.model.DiscountApplication;
-
-import com.example.demo.repository.BundleRuleRepository;
-import com.example.demo.repository.CartItemRepository;
-import com.example.demo.repository.CartRepository;
-import com.example.demo.repository.DiscountApplicationRepository;
-
+import com.example.demo.model.*;
+import com.example.demo.repository.*;
 import com.example.demo.service.DiscountService;
-
-import jakarta.persistence.EntityNotFoundException;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
-
 import org.springframework.stereotype.Service;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class DiscountServiceImpl implements DiscountService {
-
-    private final DiscountApplicationRepository discountRepo;
-    private final BundleRuleRepository bundleRepo;
-    private final CartRepository cartRepo;
-    private final CartItemRepository cartItemRepo;
-
-    public DiscountServiceImpl(
-            DiscountApplicationRepository discountRepo,
-            BundleRuleRepository bundleRepo,
-            CartRepository cartRepo,
-            CartItemRepository cartItemRepo) {
-        this.discountRepo = discountRepo;
-        this.bundleRepo = bundleRepo;
-        this.cartRepo = cartRepo;
-        this.cartItemRepo = cartItemRepo;
+    private final DiscountApplicationRepository discountApplicationRepository;
+    private final BundleRuleRepository bundleRuleRepository;
+    private final CartRepository cartRepository;
+    private final CartItemRepository cartItemRepository;
+    
+    public DiscountServiceImpl(DiscountApplicationRepository discountApplicationRepository,
+                              BundleRuleRepository bundleRuleRepository,
+                              CartRepository cartRepository,
+                              CartItemRepository cartItemRepository) {
+        this.discountApplicationRepository = discountApplicationRepository;
+        this.bundleRuleRepository = bundleRuleRepository;
+        this.cartRepository = cartRepository;
+        this.cartItemRepository = cartItemRepository;
     }
-
+    
     @Override
     public List<DiscountApplication> evaluateDiscounts(Long cartId) {
-        Cart cart = cartRepo.findById(cartId)
-                .orElseThrow(() -> new EntityNotFoundException("Cart not found"));
-
-        discountRepo.deleteByCartId(cartId);
-
-        List<CartItem> items = cartItemRepo.findByCartId(cartId);
-        List<BundleRule> rules = bundleRepo.findByActiveTrue();
-
-        for (BundleRule rule : rules) {
-            BigDecimal total = BigDecimal.ZERO;
-
-            for (CartItem item : items) {
-                total = total.add(
-                        item.getProduct().getPrice()
-                                .multiply(BigDecimal.valueOf(item.getQuantity()))
-                );
-            }
-
-            if (total.compareTo(BigDecimal.ZERO) > 0) {
-                DiscountApplication app = new DiscountApplication();
-                app.setCart(cart);
-                app.setBundleRule(rule);
-                app.setDiscountAmount(
-                        total.multiply(
-                                BigDecimal.valueOf(rule.getDiscountPercentage() / 100)
-                        )
-                );
-                app.setAppliedAt(LocalDateTime.now());
-                discountRepo.save(app);
+        Cart cart = cartRepository.findById(cartId).orElse(null);
+        if (cart == null || !cart.getActive()) {
+            return Collections.emptyList();
+        }
+        
+        List<CartItem> cartItems = cartItemRepository.findByCartId(cartId);
+        List<BundleRule> activeRules = bundleRuleRepository.findByActiveTrue();
+        
+        discountApplicationRepository.deleteByCartId(cartId);
+        
+        List<DiscountApplication> applications = new ArrayList<>();
+        Set<Long> cartProductIds = cartItems.stream()
+            .map(item -> item.getProduct().getId())
+            .collect(Collectors.toSet());
+        
+        for (BundleRule rule : activeRules) {
+            List<Long> requiredIds = Arrays.stream(rule.getRequiredProductIds().split(","))
+                .map(String::trim)
+                .map(Long::parseLong)
+                .collect(Collectors.toList());
+            
+            if (cartProductIds.containsAll(requiredIds)) {
+                BigDecimal totalPrice = cartItems.stream()
+                    .filter(item -> requiredIds.contains(item.getProduct().getId()))
+                    .map(item -> item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+                
+                BigDecimal discountAmount = totalPrice.multiply(BigDecimal.valueOf(rule.getDiscountPercentage() / 100));
+                
+                if (discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    DiscountApplication application = new DiscountApplication(cart, rule, discountAmount);
+                    applications.add(discountApplicationRepository.save(application));
+                }
             }
         }
-
-        return discountRepo.findByCartId(cartId);
-    }
-
-    @Override
-    public DiscountApplication getApplicationById(Long id) {
-        return discountRepo.findById(id)
-                .orElseThrow(() ->
-                        new EntityNotFoundException("DiscountApplication not found"));
-    }
-
-    @Override
-    public List<DiscountApplication> getApplicationsForCart(Long cartId) {
-        return discountRepo.findByCartId(cartId);
+        
+        return applications;
     }
 }
